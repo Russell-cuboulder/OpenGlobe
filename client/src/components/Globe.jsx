@@ -5,11 +5,16 @@ import 'cesium/Build/Cesium/Widgets/widgets.css'
 // No Cesium Ion services needed for the white globe
 Cesium.Ion.defaultAccessToken = ''
 
+// Country base layer styling
+const COUNTRY_FILL    = Cesium.Color.fromCssColorString('#cccccc').withAlpha(0.08)
+const COUNTRY_STROKE  = Cesium.Color.fromCssColorString('#999999').withAlpha(0.65)
+
 export default function Globe({ features, onFeatureClick }) {
-  const containerRef = useRef(null)
-  const viewerRef    = useRef(null)
-  const handlerRef   = useRef(null)
-  const entitiesRef  = useRef([])
+  const containerRef   = useRef(null)
+  const viewerRef      = useRef(null)
+  const handlerRef     = useRef(null)
+  const entitiesRef    = useRef([])
+  const countryDsRef   = useRef(null)
 
   // ── Initialise Cesium viewer once ──────────────────────────────────────────
   useEffect(() => {
@@ -38,23 +43,67 @@ export default function Globe({ features, onFeatureClick }) {
     viewer.scene.globe.baseColor            = Cesium.Color.WHITE
     viewer.scene.globe.showGroundAtmosphere = false
     viewer.scene.globe.enableLighting       = false
+    viewer.scene.globe.showWaterEffect      = false
 
-    // Subtle grid lines so the globe surface isn't completely featureless
-    viewer.scene.globe.showWaterEffect = false
+    // ── Load country base layer ──────────────────────────────────────────────
+    const loadCountries = async () => {
+      try {
+        const ds = await Cesium.GeoJsonDataSource.load('/geo/ne_110m_countries.geojson', {
+          stroke:        COUNTRY_STROKE,
+          fill:          COUNTRY_FILL,
+          strokeWidth:   1,
+          clampToGround: true,
+        })
+        ds.name = 'countries'
+        await viewer.dataSources.add(ds)
+        countryDsRef.current = ds
+      } catch (e) {
+        console.warn('OpenGlobe: could not load country base layer', e)
+      }
+    }
+    loadCountries()
 
-    // Click handler — pick entity and fire onFeatureClick
+    // ── Click handler ────────────────────────────────────────────────────────
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas)
     handler.setInputAction((click) => {
       const picked = viewer.scene.pick(click.position)
+
       if (Cesium.defined(picked) && picked.id?.properties) {
+        const names = picked.id.properties.propertyNames
+        if (!names) { onFeatureClick?.(null); return }
+
         const props = {}
-        for (const key of picked.id.properties.propertyNames) {
-          props[key] = picked.id.properties[key]?.getValue?.() ?? picked.id.properties[key]
+        for (const key of names) {
+          const val = picked.id.properties[key]
+          props[key] = val?.getValue?.() ?? val
         }
-        onFeatureClick?.(props)
-      } else {
-        onFeatureClick?.(null)
+
+        // Footprint entity — has data_type set by OpenGlobe server
+        if (props.data_type) {
+          onFeatureClick?.(props)
+          return
+        }
+
+        // Country entity — from Natural Earth GeoJSON
+        if (props.ADMIN || props.NAME) {
+          onFeatureClick?.({
+            data_type:  'Country',
+            filename:   props.ADMIN || props.NAME,
+            iso_a2:     props.ISO_A2,
+            iso_a3:     props.ISO_A3,
+            continent:  props.CONTINENT,
+            region:     props.SUBREGION,
+            pop_est:    props.POP_EST,
+            gdp_md:     props.GDP_MD,
+            economy:    props.ECONOMY,
+            income_grp: props.INCOME_GRP,
+            sovereignt: props.SOVEREIGNT,
+          })
+          return
+        }
       }
+
+      onFeatureClick?.(null)
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
 
     viewerRef.current  = viewer
@@ -63,8 +112,9 @@ export default function Globe({ features, onFeatureClick }) {
     return () => {
       handler.destroy()
       viewer.destroy()
-      viewerRef.current  = null
-      handlerRef.current = null
+      viewerRef.current    = null
+      handlerRef.current   = null
+      countryDsRef.current = null
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -73,7 +123,7 @@ export default function Globe({ features, onFeatureClick }) {
     const viewer = viewerRef.current
     if (!viewer) return
 
-    // Remove old entities
+    // Remove old footprint entities
     for (const entity of entitiesRef.current) {
       viewer.entities.remove(entity)
     }
