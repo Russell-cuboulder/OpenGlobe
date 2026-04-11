@@ -24,6 +24,7 @@ function typeCounts(features) {
 export default function Toolbar({
   projectName, features, stats, loading, error, onLoadProject,
   terrainEnabled, onToggleTerrain,
+  drawMode, onToggleDrawMode,
 }) {
   const [pathInput, setPathInput] = useState('')
   const inputRef = useRef(null)
@@ -107,6 +108,17 @@ export default function Toolbar({
           ))}
         </div>
       )}
+
+      {/* ── Draw BBox ── */}
+      <button
+        className={`draw-bbox-btn${drawMode ? ' draw-active' : ''}`}
+        onClick={onToggleDrawMode}
+        title={drawMode
+          ? 'Drawing — click two corners on the globe. Right-click to cancel.'
+          : 'Draw a bounding box to download a local DEM'}
+      >
+        ⬚ {drawMode ? 'Drawing…' : 'DEM Area'}
+      </button>
 
       {/* ── Terrain toggle ── */}
       <button

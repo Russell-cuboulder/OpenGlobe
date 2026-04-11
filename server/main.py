@@ -10,10 +10,16 @@ Run with:
 """
 
 import json
+import os
+import uuid
 from pathlib import Path
+from typing import Optional
 
+import httpx
+import numpy as np
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 # pyproj is optional — extents in projected CRS won't reproject without it
 try:
@@ -21,6 +27,23 @@ try:
     PYPROJ_AVAILABLE = True
 except ImportError:
     PYPROJ_AVAILABLE = False
+
+# rasterio is optional — needed for local DEM heightmap serving
+try:
+    import rasterio
+    RASTERIO_AVAILABLE = True
+except ImportError:
+    RASTERIO_AVAILABLE = False
+
+# ── Terrain / DEM config ──────────────────────────────────────────────────────
+OPENTOPO_KEY  = os.environ.get("OPENTOPO_KEY", "")
+OPENTOPO_URL  = "https://portal.opentopography.org/API/globaldem"
+TERRAIN_DIR   = Path(__file__).parent / "terrain"
+TERRAIN_INDEX = TERRAIN_DIR / "index.json"
+TERRAIN_DIR.mkdir(exist_ok=True)
+
+# In-process cache of open rasterio datasets (avoid re-opening on every tile)
+_dem_cache: dict[str, "rasterio.DatasetReader"] = {}
 
 app = FastAPI(title="OpenGlobe Server", version="0.1.0")
 
@@ -227,3 +250,217 @@ def get_manifest(
         "skipped_no_extent": geojson.pop("_skipped", 0),
         "geojson":        geojson,
     }
+
+
+# ── Terrain / DEM endpoints ───────────────────────────────────────────────────
+
+class DownloadRequest(BaseModel):
+    west:  float
+    south: float
+    east:  float
+    north: float
+    name:  Optional[str] = None
+
+
+def _terrain_index() -> dict:
+    if TERRAIN_INDEX.exists():
+        with open(TERRAIN_INDEX) as f:
+            return json.load(f)
+    return {}
+
+
+def _save_terrain_index(index: dict):
+    with open(TERRAIN_INDEX, "w") as f:
+        json.dump(index, f, indent=2)
+
+
+def _format_bytes(n: int) -> str:
+    if n >= 1_073_741_824:
+        return f"{n / 1_073_741_824:.1f} GB"
+    if n >= 1_048_576:
+        return f"{n / 1_048_576:.1f} MB"
+    return f"{n / 1024:.0f} KB"
+
+
+def _get_dem_dataset(dem_id: str, path: str):
+    """Return a cached rasterio dataset, opening it if needed."""
+    if dem_id not in _dem_cache:
+        _dem_cache[dem_id] = rasterio.open(path)
+    return _dem_cache[dem_id]
+
+
+@app.get("/terrain/list")
+def terrain_list():
+    """Return all downloaded DEMs."""
+    return list(_terrain_index().values())
+
+
+@app.post("/terrain/download")
+async def terrain_download(req: DownloadRequest):
+    """
+    Download a Copernicus GLO-30 DEM tile from OpenTopography for the given bbox.
+    Saves a GeoTIFF to server/terrain/ and returns the DEM metadata.
+    """
+    if not RASTERIO_AVAILABLE:
+        raise HTTPException(status_code=500,
+                            detail="rasterio is not installed — run: pip install rasterio")
+
+    # Clamp and validate
+    west  = max(-180.0, min(180.0, req.west))
+    east  = max(-180.0, min(180.0, req.east))
+    south = max(-90.0,  min(90.0,  req.south))
+    north = max(-90.0,  min(90.0,  req.north))
+
+    if east <= west or north <= south:
+        raise HTTPException(status_code=400, detail="Invalid bounding box")
+
+    area_deg2 = (east - west) * (north - south)
+    if area_deg2 > 100:
+        raise HTTPException(status_code=400,
+                            detail="Bounding box too large (max ~10°×10°). "
+                                   "Select a smaller area.")
+
+    params: dict = {
+        "demtype":      "COP30",
+        "south":        south,
+        "north":        north,
+        "west":         west,
+        "east":         east,
+        "outputFormat": "GTiff",
+    }
+    if OPENTOPO_KEY:
+        params["API_Key"] = OPENTOPO_KEY
+
+    dem_id   = uuid.uuid4().hex[:8]
+    dem_name = req.name or f"GLO30_{south:.2f}_{west:.2f}"
+    dem_path = TERRAIN_DIR / f"{dem_id}.tif"
+
+    try:
+        async with httpx.AsyncClient(timeout=600) as client:
+            response = await client.get(OPENTOPO_URL, params=params)
+
+        if response.status_code != 200:
+            # OpenTopography returns plain-text errors
+            detail = response.text[:300] if response.text else f"HTTP {response.status_code}"
+            raise HTTPException(status_code=502,
+                                detail=f"OpenTopography error: {detail}")
+
+        # Validate it's a GeoTIFF (starts with TIFF magic bytes)
+        content = response.content
+        if content[:4] not in (b"II*\x00", b"MM\x00*", b"II+\x00", b"MM\x00+"):
+            raise HTTPException(status_code=502,
+                                detail=f"OpenTopography did not return a GeoTIFF. "
+                                       f"Response: {content[:200]}")
+
+        dem_path.write_bytes(content)
+
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504,
+                            detail="Download timed out — try a smaller area")
+
+    size_bytes = dem_path.stat().st_size
+
+    entry = {
+        "id":         dem_id,
+        "name":       dem_name,
+        "path":       str(dem_path),
+        "bbox":       {"west": west, "south": south, "east": east, "north": north},
+        "size_bytes": size_bytes,
+        "size_human": _format_bytes(size_bytes),
+    }
+
+    index = _terrain_index()
+    index[dem_id] = entry
+    _save_terrain_index(index)
+
+    return entry
+
+
+@app.get("/terrain/{dem_id}/tile")
+def terrain_tile(dem_id: str,
+                 x: int = Query(...),
+                 y: int = Query(...),
+                 z: int = Query(...)):
+    """
+    Return a 32×32 heightmap grid for a Cesium geographic tile (x, y, level).
+    Heights are in metres above the WGS84 ellipsoid.
+    """
+    if not RASTERIO_AVAILABLE:
+        raise HTTPException(status_code=500, detail="rasterio not available")
+
+    index = _terrain_index()
+    if dem_id not in index:
+        raise HTTPException(status_code=404, detail="DEM not found")
+
+    entry    = index[dem_id]
+    dem_path = entry["path"]
+
+    # Cesium geographic tiling scheme
+    # Level 0: 2×1 tiles; level N: 2^(N+1) × 2^N tiles
+    num_x = 2 ** (z + 1)
+    num_y = 2 ** z
+    lon_min = x / num_x * 360.0 - 180.0
+    lon_max = (x + 1) / num_x * 360.0 - 180.0
+    lat_min = y / num_y * 180.0 - 90.0
+    lat_max = (y + 1) / num_y * 180.0 - 90.0
+
+    bbox     = entry["bbox"]
+    GRID     = 32
+    FLAT     = [0.0] * (GRID * GRID)
+
+    # Skip tiles that don't intersect the DEM coverage
+    if (lon_max < bbox["west"] or lon_min > bbox["east"] or
+            lat_max < bbox["south"] or lat_min > bbox["north"]):
+        return {"heights": FLAT}
+
+    try:
+        ds = _get_dem_dataset(dem_id, dem_path)
+        nodata = ds.nodata
+
+        # Build sample grid: top-to-bottom (Cesium expects row-major, N→S)
+        lons = np.linspace(lon_min, lon_max, GRID)
+        lats = np.linspace(lat_max, lat_min, GRID)
+        lon_grid, lat_grid = np.meshgrid(lons, lats)
+
+        coords = list(zip(lon_grid.flatten().tolist(),
+                          lat_grid.flatten().tolist()))
+
+        heights = []
+        for val in ds.sample(coords, indexes=1):
+            h = float(val[0])
+            if nodata is not None and h == nodata:
+                h = 0.0
+            elif np.isnan(h) or np.isinf(h):
+                h = 0.0
+            heights.append(h)
+
+        return {"heights": heights}
+
+    except Exception as exc:
+        raise HTTPException(status_code=500,
+                            detail=f"Failed to sample DEM: {exc}")
+
+
+@app.delete("/terrain/{dem_id}")
+def terrain_delete(dem_id: str):
+    """Remove a downloaded DEM file and its index entry."""
+    index = _terrain_index()
+    if dem_id not in index:
+        raise HTTPException(status_code=404, detail="DEM not found")
+
+    # Close and evict from cache
+    if dem_id in _dem_cache:
+        try:
+            _dem_cache[dem_id].close()
+        except Exception:
+            pass
+        del _dem_cache[dem_id]
+
+    dem_path = Path(index[dem_id]["path"])
+    if dem_path.exists():
+        dem_path.unlink()
+
+    del index[dem_id]
+    _save_terrain_index(index)
+
+    return {"status": "deleted", "id": dem_id}

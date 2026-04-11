@@ -315,6 +315,198 @@ body {
   border-color: #80cbc4;
 }
 
+/* ── Draw BBox button ─────────────────────────────────────────────────────── */
+.draw-bbox-btn {
+  flex-shrink: 0;
+  background: var(--bg-light);
+  color: var(--text-dim);
+  border: 1px solid #444466;
+  border-radius: 5px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.draw-bbox-btn:hover {
+  border-color: var(--accent);
+  color: var(--text-main);
+}
+
+.draw-bbox-btn.draw-active {
+  background: #2a2a18;
+  color: #ffe082;
+  border-color: #ffe082;
+  animation: pulse-border 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% { border-color: #ffe082; }
+  50%       { border-color: #888860; }
+}
+
+/* ── DEM Panel ────────────────────────────────────────────────────────────── */
+.dem-panel {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  width: 260px;
+  background: var(--bg-mid);
+  border: 1px solid var(--bg-light);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  overflow: hidden;
+  z-index: 1000;
+  animation: slideUp 0.18s ease-out;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.dem-section {
+  padding: 12px 14px;
+}
+
+.dem-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.dem-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.dem-divider {
+  border-top: 1px solid var(--bg-light);
+  margin: 0 0 12px;
+}
+
+.dem-bbox-grid {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr;
+  gap: 4px 8px;
+  margin-bottom: 8px;
+}
+
+.dem-bbox-label {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dem-bbox-val {
+  color: var(--text-main);
+  font-size: 11px;
+  font-family: 'Consolas', 'Menlo', monospace;
+}
+
+.dem-size-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.dem-error {
+  font-size: 11px;
+  color: #f48fb1;
+  margin-bottom: 8px;
+  word-break: break-word;
+}
+
+.dem-download-btn {
+  width: 100%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dem-download-btn:hover    { background: #5a8ee6; }
+.dem-download-btn:disabled { background: var(--bg-light); color: var(--text-dim); cursor: default; }
+
+.dem-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--bg-light);
+}
+
+.dem-row:last-child { border-bottom: none; }
+
+.dem-row-active { background: rgba(128, 203, 196, 0.05); }
+
+.dem-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.dem-row-name {
+  font-size: 12px;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dem-row-meta {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.dem-row-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.dem-toggle-btn {
+  background: var(--bg-light);
+  color: var(--text-dim);
+  border: 1px solid #444466;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dem-toggle-btn.active {
+  background: #1a3328;
+  color: #80cbc4;
+  border-color: #80cbc4;
+}
+
+.dem-delete-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 4px;
+}
+
+.dem-delete-btn:hover { color: #f48fb1; background: rgba(244,143,177,0.1); }
+
 /* ── Cesium widget overrides ───────────────────────────────────────────────── */
 .cesium-widget-credits {
   display: none !important;
