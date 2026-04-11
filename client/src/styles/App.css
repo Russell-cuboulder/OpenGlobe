@@ -290,6 +290,31 @@ body {
   background: #444466;
 }
 
+/* ── Terrain toggle ───────────────────────────────────────────────────────── */
+.terrain-btn {
+  flex-shrink: 0;
+  background: var(--bg-light);
+  color: var(--text-dim);
+  border: 1px solid #444466;
+  border-radius: 5px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.terrain-btn:hover {
+  border-color: var(--accent);
+  color: var(--text-main);
+}
+
+.terrain-btn.terrain-on {
+  background: #1a3328;
+  color: #80cbc4;
+  border-color: #80cbc4;
+}
+
 /* ── Cesium widget overrides ───────────────────────────────────────────────── */
 .cesium-widget-credits {
   display: none !important;

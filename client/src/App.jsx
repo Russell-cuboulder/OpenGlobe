@@ -11,6 +11,7 @@ export default function App() {
   const [selectedFeature, setSelectedFeature] = useState(null)
   const [loading, setLoading]                 = useState(false)
   const [error, setError]                     = useState(null)
+  const [terrainEnabled, setTerrainEnabled]   = useState(false)
 
   const loadProject = useCallback(async (geolookPath) => {
     setLoading(true)
@@ -46,11 +47,14 @@ export default function App() {
         loading={loading}
         error={error}
         onLoadProject={loadProject}
+        terrainEnabled={terrainEnabled}
+        onToggleTerrain={() => setTerrainEnabled(t => !t)}
       />
       <div className="globe-wrap">
         <Globe
           features={features}
           onFeatureClick={setSelectedFeature}
+          terrainEnabled={terrainEnabled}
         />
         {selectedFeature && (
           <AttributionPanel

@@ -5,11 +5,15 @@ import 'cesium/Build/Cesium/Widgets/widgets.css'
 // No Cesium Ion services needed for the white globe
 Cesium.Ion.defaultAccessToken = ''
 
+const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY
+const MAPTILER_TERRAIN_URL =
+  `https://api.maptiler.com/tiles/terrain-quantized-mesh-v2/?key=${MAPTILER_KEY}`
+
 // Country base layer styling
 const COUNTRY_FILL    = Cesium.Color.fromCssColorString('#cccccc').withAlpha(0.08)
 const COUNTRY_STROKE  = Cesium.Color.fromCssColorString('#999999').withAlpha(0.65)
 
-export default function Globe({ features, onFeatureClick }) {
+export default function Globe({ features, onFeatureClick, terrainEnabled }) {
   const containerRef   = useRef(null)
   const viewerRef      = useRef(null)
   const handlerRef     = useRef(null)
@@ -117,6 +121,26 @@ export default function Globe({ features, onFeatureClick }) {
       countryDsRef.current = null
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Swap terrain provider when toggle changes ─────────────────────────────
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (!viewer) return
+
+    if (terrainEnabled) {
+      if (!MAPTILER_KEY) {
+        console.warn('OpenGlobe: set VITE_MAPTILER_KEY in .env.local to enable terrain')
+        return
+      }
+      Cesium.CesiumTerrainProvider.fromUrl(MAPTILER_TERRAIN_URL, {
+        requestVertexNormals: true,
+      }).then(provider => {
+        if (viewerRef.current) viewerRef.current.terrainProvider = provider
+      }).catch(e => console.warn('OpenGlobe: terrain load failed', e))
+    } else {
+      viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider()
+    }
+  }, [terrainEnabled])
 
   // ── Re-render footprint polygons when features change ──────────────────────
   useEffect(() => {

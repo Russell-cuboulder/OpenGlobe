@@ -23,6 +23,7 @@ function typeCounts(features) {
 
 export default function Toolbar({
   projectName, features, stats, loading, error, onLoadProject,
+  terrainEnabled, onToggleTerrain,
 }) {
   const [pathInput, setPathInput] = useState('')
   const inputRef = useRef(null)
@@ -106,6 +107,15 @@ export default function Toolbar({
           ))}
         </div>
       )}
+
+      {/* ── Terrain toggle ── */}
+      <button
+        className={`terrain-btn${terrainEnabled ? ' terrain-on' : ''}`}
+        onClick={onToggleTerrain}
+        title={terrainEnabled ? 'Terrain ON — click to disable' : 'Enable 3D terrain (requires MapTiler key)'}
+      >
+        ▲ {terrainEnabled ? 'Terrain ON' : 'Terrain'}
+      </button>
     </div>
   )
 }
