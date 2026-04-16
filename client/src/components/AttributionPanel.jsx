@@ -55,7 +55,7 @@ function pickTool(data_type, stereo_role) {
   return TOOL_LABEL[data_type] || 'OpenGeoLook'
 }
 
-export default function AttributionPanel({ feature, onClose }) {
+export default function AttributionPanel({ feature, onClose, onLoadData }) {
   const [launching, setLaunching] = useState(false)
   const [launchMsg, setLaunchMsg] = useState(null)
 
@@ -182,6 +182,15 @@ export default function AttributionPanel({ feature, onClose }) {
           </div>
           {launchMsg && (
             <div className="attr-launch-msg">{launchMsg}</div>
+          )}
+          {!isCountry && (
+            <button
+              className="attr-load-btn"
+              onClick={() => onLoadData?.(feature)}
+              title="Stream actual geometry onto the globe"
+            >
+              ⬡ Load on Globe
+            </button>
           )}
         </>}
 

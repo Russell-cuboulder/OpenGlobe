@@ -19,6 +19,7 @@ export default function App() {
   const [drawnBbox, setDrawnBbox]     = useState(null)   // {west,south,east,north}
   const [demList, setDemList]         = useState([])      // downloaded DEMs
   const [activeDemId, setActiveDemId] = useState(null)   // which DEM is live terrain
+  const [loadedLayers, setLoadedLayers] = useState([])   // {id, name, geojson, color}
 
   // Auto-load from ?project= URL param on first mount
   useEffect(() => {
@@ -53,6 +54,18 @@ export default function App() {
     } finally {
       setLoading(false)
     }
+  }, [])
+
+  const handleLoadData = useCallback(async (feature) => {
+    const res = await fetch(`/api/data?path=${encodeURIComponent(feature.path)}`)
+    if (!res.ok) return
+    const geojson = await res.json()
+    const id = feature.path
+    setLoadedLayers(prev => {
+      // toggle off if already loaded
+      if (prev.find(l => l.id === id)) return prev.filter(l => l.id !== id)
+      return [...prev, { id, name: feature.filename, geojson, color: feature.color }]
+    })
   }, [])
 
   // Called by Globe when user completes a bbox draw
@@ -119,11 +132,13 @@ export default function App() {
           drawMode={drawMode}
           onBboxDrawn={handleBboxDrawn}
           activeDemId={activeDemId}
+          loadedLayers={loadedLayers}
         />
         {selectedFeature && (
           <AttributionPanel
             feature={selectedFeature}
             onClose={() => setSelectedFeature(null)}
+            onLoadData={handleLoadData}
           />
         )}
         {showDemPanel && (

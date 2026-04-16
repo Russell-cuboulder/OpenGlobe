@@ -295,6 +295,150 @@ def tool_status():
     }
 
 
+@app.get("/data")
+def get_data(
+    path: str = Query(..., description="Absolute path to a geospatial file"),
+    max_features: int = Query(5000, description="Max features to return for vector files"),
+):
+    """
+    Load a geospatial file and return its actual geometry as GeoJSON.
+    Supports vector (fiona), raster extents (GDAL), and point clouds (laspy).
+    """
+    file_path = Path(path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+
+    ext = file_path.suffix.lower()
+
+    # ── Vector / CAD ─────────────────────────────────────────────────────────
+    if ext in {".shp", ".geojson", ".kml", ".kmz", ".gpkg", ".gml",
+               ".gpx", ".tab", ".mif", ".sqlite", ".dxf", ".dgn", ".dwg"}:
+        if not PYPROJ_AVAILABLE:
+            raise HTTPException(status_code=503, detail="pyproj not available")
+        try:
+            import fiona
+            import fiona.transform
+            features = []
+            with fiona.open(str(file_path)) as layer:
+                src_crs = layer.crs
+                total   = len(layer)
+                step    = max(1, total // max_features)
+                for i, feat in enumerate(layer):
+                    if i % step != 0:
+                        continue
+                    if feat.geometry is None:
+                        continue
+                    # Reproject to WGS84 if needed
+                    try:
+                        if src_crs and src_crs.to_epsg() != 4326:
+                            geom = fiona.transform.transform_geom(
+                                src_crs, "EPSG:4326", feat.geometry
+                            )
+                        else:
+                            geom = feat.geometry
+                    except Exception:
+                        geom = feat.geometry
+                    features.append({
+                        "type":       "Feature",
+                        "geometry":   geom,
+                        "properties": {
+                            k: v for k, v in (feat.properties or {}).items()
+                            if v is not None
+                        },
+                    })
+            return {
+                "type":     "FeatureCollection",
+                "features": features,
+                "meta": {
+                    "total":    total,
+                    "returned": len(features),
+                    "sampled":  total > max_features,
+                },
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    # ── Raster — return outline + basic info (tile serving is separate) ───────
+    if ext in {".tif", ".tiff", ".jp2", ".img", ".ecw", ".vrt",
+               ".asc", ".dem", ".hgt"}:
+        try:
+            from osgeo import gdal, osr
+            ds = gdal.Open(str(file_path), gdal.GA_ReadOnly)
+            if ds is None:
+                raise HTTPException(status_code=500, detail="GDAL could not open file")
+            gt   = ds.GetGeoTransform()
+            cols = ds.RasterXSize
+            rows = ds.RasterYSize
+            wkt  = ds.GetProjectionRef()
+            xmin = gt[0];  xmax = gt[0] + cols * gt[1]
+            ymax = gt[3];  ymin = gt[3] + rows * gt[5]
+            if ymin > ymax: ymin, ymax = ymax, ymin
+
+            # Reproject corners to WGS84
+            if wkt and PYPROJ_AVAILABLE:
+                transformer = Transformer.from_crs(
+                    CRS.from_wkt(wkt), CRS.from_epsg(4326), always_xy=True
+                )
+                xmin, ymin = transformer.transform(xmin, ymin)
+                xmax, ymax = transformer.transform(xmax, ymax)
+
+            ds = None
+            coords = [[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax], [xmin, ymin]]
+            return {
+                "type": "FeatureCollection",
+                "features": [{
+                    "type": "Feature",
+                    "geometry":   {"type": "Polygon", "coordinates": [coords]},
+                    "properties": {"filename": file_path.name, "type": "raster_extent"},
+                }],
+                "meta": {"type": "raster", "path": str(file_path)},
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    # ── Point cloud — sample and return as GeoJSON points ────────────────────
+    if ext in {".las", ".laz"}:
+        try:
+            import laspy
+            max_pts = 50_000
+            with laspy.open(str(file_path)) as f:
+                total = int(f.header.point_count)
+                step  = max(1, total // max_pts)
+                las   = f.read()
+
+            # Reproject XY to WGS84
+            xs = las.x[::step].copy()
+            ys = las.y[::step].copy()
+            zs = las.z[::step].copy()
+
+            if PYPROJ_AVAILABLE:
+                try:
+                    src_crs = las.header.parse_crs()
+                    if src_crs is not None:
+                        t = Transformer.from_crs(src_crs, CRS.from_epsg(4326), always_xy=True)
+                        xs, ys = t.transform(xs, ys)
+                except Exception:
+                    pass
+
+            features = [
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [float(x), float(y), float(z)]},
+                    "properties": {},
+                }
+                for x, y, z in zip(xs, ys, zs)
+            ]
+            return {
+                "type":     "FeatureCollection",
+                "features": features,
+                "meta": {"total": total, "returned": len(features), "sampled": total > max_pts},
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    raise HTTPException(status_code=415, detail=f"Unsupported file type: {ext}")
+
+
 @app.get("/health")
 def health():
     return {

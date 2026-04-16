@@ -22,12 +22,14 @@ export default function Globe({
   terrainEnabled,
   drawMode, onBboxDrawn,
   activeDemId,
+  loadedLayers = [],
 }) {
   const containerRef   = useRef(null)
   const viewerRef      = useRef(null)
   const handlerRef     = useRef(null)
   const entitiesRef    = useRef([])
   const countryDsRef   = useRef(null)
+  const layerDsRef     = useRef({})   // path → GeoJsonDataSource
 
   // Draw mode state — all in refs to avoid stale closures in event handlers
   const drawRef        = useRef({ corner1: null, rectCoords: null, rectEntity: null })
@@ -324,6 +326,40 @@ export default function Globe({
 
     viewer.flyTo(viewer.entities, { duration: 1.5 })
   }, [features])
+
+  // ── Render loaded data layers (vector / point cloud GeoJSON) ─────────────
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (!viewer) return
+
+    const currentIds = new Set(loadedLayers.map(l => l.id))
+
+    // Remove layers that were toggled off
+    for (const [id, ds] of Object.entries(layerDsRef.current)) {
+      if (!currentIds.has(id)) {
+        viewer.dataSources.remove(ds, true)
+        delete layerDsRef.current[id]
+      }
+    }
+
+    // Add new layers
+    for (const layer of loadedLayers) {
+      if (layerDsRef.current[layer.id]) continue
+      const color = Cesium.Color.fromCssColorString(layer.color || '#ffffff').withAlpha(0.85)
+      Cesium.GeoJsonDataSource.load(layer.geojson, {
+        stroke:      color,
+        fill:        color.withAlpha(0.35),
+        strokeWidth: 2,
+        markerColor: color,
+        clampToGround: true,
+      }).then(ds => {
+        ds.name = layer.name
+        viewer.dataSources.add(ds)
+        layerDsRef.current[layer.id] = ds
+        viewer.flyTo(ds, { duration: 1.2 })
+      }).catch(e => console.warn('OpenGlobe: layer load failed', e))
+    }
+  }, [loadedLayers])
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }} />

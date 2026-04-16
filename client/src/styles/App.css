@@ -315,6 +315,21 @@ body {
   text-align: center;
 }
 
+.attr-load-btn {
+  margin-top: 8px;
+  width: 100%;
+  background: #1a3d1a;
+  color: #a5d6a7;
+  border: 1px solid #a5d6a766;
+  border-radius: 5px;
+  padding: 7px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+}
+.attr-load-btn:hover { background: #224422; border-color: #a5d6a7; }
+
 /* ── Terrain toggle ───────────────────────────────────────────────────────── */
 .terrain-btn {
   flex-shrink: 0;
