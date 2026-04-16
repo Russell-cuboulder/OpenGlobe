@@ -26,7 +26,10 @@ export default function Toolbar({
   terrainEnabled, onToggleTerrain,
   drawMode, onToggleDrawMode,
 }) {
-  const [pathInput, setPathInput] = useState('')
+  const [pathInput, setPathInput] = useState(() => {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('project') || ''
+  })
   const inputRef = useRef(null)
 
   const handleLoad = () => {

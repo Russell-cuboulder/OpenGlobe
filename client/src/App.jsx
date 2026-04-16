@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import Globe from './components/Globe.jsx'
 import Toolbar from './components/Toolbar.jsx'
 import AttributionPanel from './components/AttributionPanel.jsx'
@@ -19,6 +19,16 @@ export default function App() {
   const [drawnBbox, setDrawnBbox]     = useState(null)   // {west,south,east,north}
   const [demList, setDemList]         = useState([])      // downloaded DEMs
   const [activeDemId, setActiveDemId] = useState(null)   // which DEM is live terrain
+
+  // Auto-load from ?project= URL param on first mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const projectPath = params.get('project')
+    if (projectPath) {
+      loadProject(projectPath)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const loadProject = useCallback(async (geolookPath) => {
     setLoading(true)
