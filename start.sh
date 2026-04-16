@@ -15,10 +15,11 @@ cd "$SCRIPT_DIR/server"
 nohup .venv/bin/uvicorn main:app --port 8765 --host 0.0.0.0 > /tmp/openglobe-server.log 2>&1 &
 echo "  FastAPI PID $!"
 
-echo "==> Starting Vite client on :5173..."
+echo "==> Building and starting Vite client on :5173..."
 cd "$SCRIPT_DIR/client"
-nohup npm run dev > /tmp/openglobe-client.log 2>&1 &
-echo "  Vite PID $!"
+npm run build 2>&1 | tail -3
+nohup npm run preview > /tmp/openglobe-client.log 2>&1 &
+echo "  Preview PID $!"
 
 sleep 4
 echo ""

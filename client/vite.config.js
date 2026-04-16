@@ -12,6 +12,6 @@ const apiProxy = {
 
 export default defineConfig({
   plugins: [react(), cesium()],
-  server:  { port: 5173, proxy: apiProxy },
-  preview: { port: 5173, proxy: apiProxy },
+  server:  { host: '0.0.0.0', port: 5173, proxy: apiProxy },
+  preview: { host: '0.0.0.0', port: 5173, proxy: apiProxy },
 })
