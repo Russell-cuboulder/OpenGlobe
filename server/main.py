@@ -11,6 +11,7 @@ Run with:
 
 import json
 import os
+import subprocess
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -201,6 +202,98 @@ def records_to_geojson(records: list[dict],
 
 
 # ── API endpoints ─────────────────────────────────────────────────────────────
+
+# ── Tool routing ─────────────────────────────────────────────────────────────
+
+HOME = Path.home()
+
+# Tool definitions: name, check path, launch command template (%s = file path)
+_TOOLS: dict[str, dict] = {
+    "OpenGeoLook": {
+        "check":   "/usr/local/bin/OpenGeoLook",
+        "cmd":     ["/usr/local/bin/OpenGeoLook", "%s"],
+        "types":   {"Vector", "CAD", "Project", "Style", "Grid", "Elevation",
+                    "Raster", "Unknown"},
+    },
+    "OpenLiDAR": {
+        "check":   str(HOME / "Projects/OpenLiDAR/openlidar/node_modules/.bin/electron"),
+        "cmd":     ["npm", "start", "--", "%s"],
+        "cwd":     str(HOME / "Projects/OpenLiDAR/openlidar"),
+        "types":   {"Point Cloud"},
+    },
+    "OpenStereo": {
+        "check":   "/usr/local/bin/OpenStereo",
+        "cmd":     ["/usr/local/bin/OpenStereo", "%s"],
+        "types":   set(),   # activated via stereo_role flag, not data_type
+    },
+    "OpenVoxelite": {
+        "check":   "/usr/local/bin/OpenVoxelite",
+        "cmd":     ["/usr/local/bin/OpenVoxelite", "%s"],
+        "types":   {"Voxelite"},
+    },
+}
+
+def _pick_tool(data_type: str, stereo_role: str) -> str:
+    """Return the best tool name for this file."""
+    if stereo_role:
+        return "OpenStereo"
+    if data_type == "Voxelite":
+        return "OpenVoxelite"
+    if data_type == "Point Cloud":
+        return "OpenLiDAR"
+    return "OpenGeoLook"
+
+def _tool_installed(tool_name: str) -> bool:
+    check = _TOOLS[tool_name].get("check", "")
+    return bool(check and Path(check).exists())
+
+
+class OpenRequest(BaseModel):
+    path:       str
+    data_type:  str  = ""
+    stereo_role: str = ""
+
+
+@app.post("/open")
+def open_in_tool(req: OpenRequest):
+    """Launch the appropriate suite tool for a given file."""
+    file_path = Path(req.path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {req.path}")
+
+    tool_name = _pick_tool(req.data_type, req.stereo_role)
+    tool      = _TOOLS[tool_name]
+
+    if not _tool_installed(tool_name):
+        return {
+            "launched":  False,
+            "tool":      tool_name,
+            "reason":    f"{tool_name} is not installed on this machine",
+        }
+
+    cmd = [c.replace("%s", str(file_path)) for c in tool["cmd"]]
+    env = {**os.environ, "DISPLAY": ":2"}   # target the VNC desktop
+    kwargs: dict = dict(
+        env=env,
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if "cwd" in tool:
+        kwargs["cwd"] = tool["cwd"]
+
+    subprocess.Popen(cmd, **kwargs)
+    return {"launched": True, "tool": tool_name, "file": str(file_path)}
+
+
+@app.get("/tools")
+def tool_status():
+    """Return which suite tools are installed on this machine."""
+    return {
+        name: _tool_installed(name)
+        for name in _TOOLS
+    }
+
 
 @app.get("/health")
 def health():

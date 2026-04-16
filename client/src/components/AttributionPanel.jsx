@@ -1,4 +1,5 @@
 // Attribution panel — slides in from the right when a footprint or country is clicked
+import { useState } from 'react'
 
 const TYPE_COLORS = {
   'Voxelite':    '#ff9800',
@@ -44,7 +45,20 @@ function formatGdp(n) {
   return `$${n.toLocaleString()}M`
 }
 
+const TOOL_LABEL = {
+  'Point Cloud': 'OpenLiDAR',
+  'Voxelite':   'OpenVoxelite',
+}
+
+function pickTool(data_type, stereo_role) {
+  if (stereo_role)              return 'OpenStereo'
+  return TOOL_LABEL[data_type] || 'OpenGeoLook'
+}
+
 export default function AttributionPanel({ feature, onClose }) {
+  const [launching, setLaunching] = useState(false)
+  const [launchMsg, setLaunchMsg] = useState(null)
+
   if (!feature) return null
 
   const color     = TYPE_COLORS[feature.data_type] || '#9e9e9e'
@@ -53,6 +67,34 @@ export default function AttributionPanel({ feature, onClose }) {
   const isVector  = feature.data_type === 'Vector'
   const isStereo  = !!feature.stereo_role
   const isCountry = feature.data_type === 'Country'
+  const toolName  = pickTool(feature.data_type, feature.stereo_role)
+
+  const handleOpenInSuite = async () => {
+    setLaunching(true)
+    setLaunchMsg(null)
+    try {
+      const res = await fetch('/api/open', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          path:        feature.path,
+          data_type:   feature.data_type  || '',
+          stereo_role: feature.stereo_role || '',
+        }),
+      })
+      const data = await res.json()
+      if (data.launched) {
+        setLaunchMsg(`✓ Opened in ${data.tool}`)
+      } else {
+        setLaunchMsg(`${data.tool} not installed`)
+      }
+    } catch (e) {
+      setLaunchMsg('Launch failed')
+    } finally {
+      setLaunching(false)
+      setTimeout(() => setLaunchMsg(null), 3000)
+    }
+  }
 
   return (
     <div className="attr-panel">
@@ -122,12 +164,25 @@ export default function AttributionPanel({ feature, onClose }) {
             <span className="attr-path-value">{feature.path}</span>
           </div>
 
-          <button
-            className="attr-copy-btn"
-            onClick={() => navigator.clipboard?.writeText(feature.path)}
-          >
-            Copy Path
-          </button>
+          <div className="attr-actions">
+            <button
+              className="attr-copy-btn"
+              onClick={() => navigator.clipboard?.writeText(feature.path)}
+            >
+              Copy Path
+            </button>
+            <button
+              className="attr-open-btn"
+              onClick={handleOpenInSuite}
+              disabled={launching}
+              title={`Open this file in ${toolName} on the desktop`}
+            >
+              {launching ? 'Launching…' : `Open in ${toolName}`}
+            </button>
+          </div>
+          {launchMsg && (
+            <div className="attr-launch-msg">{launchMsg}</div>
+          )}
         </>}
 
       </div>

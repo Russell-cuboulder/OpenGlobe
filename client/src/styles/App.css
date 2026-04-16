@@ -274,9 +274,14 @@ body {
   word-break: break-all;
 }
 
-.attr-copy-btn {
+.attr-actions {
   margin-top: 10px;
-  width: 100%;
+  display: flex;
+  gap: 6px;
+}
+
+.attr-copy-btn {
+  flex: 1;
   background: var(--bg-light);
   color: var(--text-main);
   border: 1px solid #444466;
@@ -286,8 +291,28 @@ body {
   cursor: pointer;
 }
 
-.attr-copy-btn:hover {
-  background: #444466;
+.attr-copy-btn:hover { background: #444466; }
+
+.attr-open-btn {
+  flex: 2;
+  background: #1a3a5c;
+  color: #4fc3f7;
+  border: 1px solid #4fc3f766;
+  border-radius: 5px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.attr-open-btn:hover  { background: #1e4a72; border-color: #4fc3f7; }
+.attr-open-btn:disabled { opacity: 0.5; cursor: default; }
+
+.attr-launch-msg {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #a5d6a7;
+  text-align: center;
 }
 
 /* ── Terrain toggle ───────────────────────────────────────────────────────── */
