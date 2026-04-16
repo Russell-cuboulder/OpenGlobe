@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react'
 import * as Cesium from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 
-// No Cesium Ion services needed for the white globe
-Cesium.Ion.defaultAccessToken = ''
+// Disable Cesium Ion — we use no cloud services
+Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlYWE1OWUxNy1mMWZiLTQzYjYtYTQ0OS1kMWFjYmFkNjc5YzciLCJpZCI6NTc3MzMsImlhdCI6MTYyMjY0NjQ5NH0.XcKpgANiY19MC4bdFUXMVEBToBmqS8kuYpUlxJHYZxk'
 
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY
 const MAPTILER_TERRAIN_URL =
@@ -43,8 +43,8 @@ export default function Globe({
     if (!containerRef.current || viewerRef.current) return
 
     const viewer = new Cesium.Viewer(containerRef.current, {
-      imageryProvider:       false,
-      terrainProvider:       new Cesium.EllipsoidTerrainProvider(),
+      baseLayer:             false,                               // v1.104+ — no Ion imagery
+      terrainProvider:       new Cesium.EllipsoidTerrainProvider(), // flat, no network
       baseLayerPicker:       false,
       geocoder:              false,
       homeButton:            true,
