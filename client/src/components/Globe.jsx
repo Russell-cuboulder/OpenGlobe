@@ -42,9 +42,16 @@ export default function Globe({
   useEffect(() => {
     if (!containerRef.current || viewerRef.current) return
 
+    // 1×1 white PNG — gives Cesium a ready imagery layer with zero network requests
+    const WHITE_TILE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQAABjE+ibYAAAAASUVORK5CYII='
+    const whiteImagery = new Cesium.SingleTileImageryProvider({
+      url:       WHITE_TILE,
+      rectangle: Cesium.Rectangle.MAX_VALUE,
+    })
+
     const viewer = new Cesium.Viewer(containerRef.current, {
-      baseLayer:             false,                               // v1.104+ — no Ion imagery
-      terrainProvider:       new Cesium.EllipsoidTerrainProvider(), // flat, no network
+      baseLayer:             new Cesium.ImageryLayer(whiteImagery),
+      terrainProvider:       new Cesium.EllipsoidTerrainProvider(),
       baseLayerPicker:       false,
       geocoder:              false,
       homeButton:            true,
