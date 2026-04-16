@@ -348,15 +348,16 @@ export default function Globe({
       const color = Cesium.Color.fromCssColorString(layer.color || '#ffffff').withAlpha(0.85)
       Cesium.GeoJsonDataSource.load(layer.geojson, {
         stroke:      color,
-        fill:        color.withAlpha(0.35),
+        fill:        color.withAlpha(0.3),
         strokeWidth: 2,
         markerColor: color,
-        clampToGround: true,
+        markerSize:  12,
       }).then(ds => {
         ds.name = layer.name
         viewer.dataSources.add(ds)
         layerDsRef.current[layer.id] = ds
-        viewer.flyTo(ds, { duration: 1.2 })
+        // Zoom to bounding sphere without clamp computation
+        viewer.zoomTo(ds)
       }).catch(e => console.warn('OpenGlobe: layer load failed', e))
     }
   }, [loadedLayers])
