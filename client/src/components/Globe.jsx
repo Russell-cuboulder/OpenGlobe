@@ -68,8 +68,8 @@ export default function Globe({
       skyAtmosphere:         false,
     })
 
-    viewer.scene.backgroundColor            = Cesium.Color.WHITE
-    viewer.scene.globe.baseColor            = Cesium.Color.WHITE
+    viewer.scene.backgroundColor            = Cesium.Color.fromCssColorString('#0d1117')
+    viewer.scene.globe.baseColor            = Cesium.Color.fromCssColorString('#1a2332')
     viewer.scene.globe.showGroundAtmosphere = false
     viewer.scene.globe.enableLighting       = false
     viewer.scene.globe.showWaterEffect      = false
@@ -350,10 +350,10 @@ export default function Globe({
 
       Cesium.GeoJsonDataSource.load(layer.url, {
         stroke:      color,
-        fill:        color.withAlpha(0.25),
-        strokeWidth: 2,
+        fill:        color.withAlpha(0.35),
+        strokeWidth: 3,
         markerColor: color,
-        markerSize:  14,
+        markerSize:  16,
       }).then(ds => {
         ds.name = layer.name
         viewer.dataSources.add(ds)
