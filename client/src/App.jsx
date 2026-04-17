@@ -56,15 +56,16 @@ export default function App() {
     }
   }, [])
 
-  const handleLoadData = useCallback(async (feature) => {
-    const res = await fetch(`/api/data?path=${encodeURIComponent(feature.path)}`)
-    if (!res.ok) return
-    const geojson = await res.json()
+  const handleLoadData = useCallback((feature) => {
     const id = feature.path
     setLoadedLayers(prev => {
-      // toggle off if already loaded
       if (prev.find(l => l.id === id)) return prev.filter(l => l.id !== id)
-      return [...prev, { id, name: feature.filename, geojson, color: feature.color }]
+      return [...prev, {
+        id,
+        name:  feature.filename,
+        url:   `/api/data?path=${encodeURIComponent(feature.path)}`,
+        color: feature.color,
+      }]
     })
   }, [])
 

@@ -342,34 +342,24 @@ export default function Globe({
       }
     }
 
-    // Add new layers
+    // Add new layers — load directly from the API URL
     for (const layer of loadedLayers) {
       if (layerDsRef.current[layer.id]) continue
 
       const color = Cesium.Color.fromCssColorString(layer.color || '#4fc3f7').withAlpha(0.85)
 
-      // Extract pure GeoJSON (strip our meta key) and serve as a Blob URL
-      // — GeoJsonDataSource.load() is most reliable with a URL, not a raw object
-      const geojson = { type: layer.geojson.type, features: layer.geojson.features }
-      const blob = new Blob([JSON.stringify(geojson)], { type: 'application/geo+json' })
-      const url  = URL.createObjectURL(blob)
-
-      const ds = new Cesium.GeoJsonDataSource(layer.name)
-      ds.load(url, {
+      Cesium.GeoJsonDataSource.load(layer.url, {
         stroke:      color,
         fill:        color.withAlpha(0.25),
         strokeWidth: 2,
         markerColor: color,
         markerSize:  14,
-      }).then(() => {
-        URL.revokeObjectURL(url)
+      }).then(ds => {
+        ds.name = layer.name
         viewer.dataSources.add(ds)
         layerDsRef.current[layer.id] = ds
         viewer.zoomTo(ds)
-      }).catch(e => {
-        URL.revokeObjectURL(url)
-        console.warn('OpenGlobe: layer load failed', layer.name, e)
-      })
+      }).catch(e => console.warn('OpenGlobe: layer load failed', layer.name, e))
     }
   }, [loadedLayers])
 
