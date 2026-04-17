@@ -295,6 +295,27 @@ def tool_status():
     }
 
 
+def _strip_z(geom: dict) -> dict:
+    """Recursively remove Z coordinates from a GeoJSON geometry."""
+    def _2d(coord):
+        return [coord[0], coord[1]]
+    def _ring(ring):
+        return [_2d(c) for c in ring]
+    t = geom.get("type", "")
+    c = geom.get("coordinates")
+    if t == "Point":
+        return {**geom, "coordinates": _2d(c)}
+    if t in ("LineString", "MultiPoint"):
+        return {**geom, "coordinates": [_2d(p) for p in c]}
+    if t in ("Polygon", "MultiLineString"):
+        return {**geom, "coordinates": [_ring(r) for r in c]}
+    if t == "MultiPolygon":
+        return {**geom, "coordinates": [[_ring(r) for r in poly] for poly in c]}
+    if t == "GeometryCollection":
+        return {**geom, "geometries": [_strip_z(g) for g in geom.get("geometries", [])]}
+    return geom
+
+
 @app.get("/data")
 def get_data(
     path: str = Query(..., description="Absolute path to a geospatial file"),
@@ -340,7 +361,7 @@ def get_data(
                         geom = feat.geometry
                     features.append({
                         "type":       "Feature",
-                        "geometry":   geom,
+                        "geometry":   _strip_z(geom),
                         "properties": {
                             k: v for k, v in (feat.properties or {}).items()
                             if v is not None
